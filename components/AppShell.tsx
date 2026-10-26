@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeftRight, CreditCard, LayoutDashboard, LogOut, Menu, Moon, Plus, Repeat, Settings, Sun, Target,
+  ArrowLeftRight, CreditCard, Goal, LayoutDashboard, LogOut, Menu, Moon, Plus, Repeat, Settings, Sun, Target,
 } from "lucide-react";
 import { useQuickAdd } from "./QuickAdd";
 import { useAppData } from "./providers";
@@ -16,6 +16,7 @@ const NAV = [
   { href: "/transactions", label: "Операции", icon: ArrowLeftRight, monthAware: true },
   { href: "/plan", label: "План месяца", icon: Target, monthAware: true },
   { href: "/debts", label: "Долги", icon: CreditCard },
+  { href: "/goals", label: "Цели", icon: Goal },
   { href: "/recurring", label: "Регулярные", icon: Repeat },
   { href: "/settings", label: "Настройки", icon: Settings },
 ];
@@ -178,7 +179,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             onClick={() => setMoreOpen(true)}
             className={cx(
               "flex flex-col items-center gap-1 text-[11px] font-medium",
-              current && ["/plan", "/recurring", "/settings"].includes(current.href) ? "text-brand-600 dark:text-brand-400" : "text-gray-500 dark:text-gray-400",
+              current && ["/plan", "/goals", "/recurring", "/settings"].includes(current.href) ? "text-brand-600 dark:text-brand-400" : "text-gray-500 dark:text-gray-400",
             )}
           >
             <Menu className="size-5" />

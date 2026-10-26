@@ -62,6 +62,19 @@ export const SEED_RECURRING: SeedRecurring[] = [
   { key: "tf", name: "TF", amountCents: 20_000, category: "debts", debt: "tf" },
 ];
 
+export interface SeedGoal {
+  key: string;
+  name: string;
+  targetCents: number;
+  icon: string;
+  color: string;
+  deadline?: string;
+}
+
+export const SEED_GOALS: SeedGoal[] = [
+  { key: "car", name: "Машина", targetCents: 1_000_000, icon: "car", color: "#2a78d6", deadline: "2027-12" },
+];
+
 export interface SeedTransaction {
   date: string;
   amountCents: number;
@@ -70,6 +83,7 @@ export interface SeedTransaction {
   category?: string;
   debt?: string;
   recurring?: string;
+  goal?: string;
 }
 
 export const SEED_MONTH = "2026-06";

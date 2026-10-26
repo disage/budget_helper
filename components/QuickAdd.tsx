@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CreditCard } from "lucide-react";
+import { CreditCard, PiggyBank } from "lucide-react";
 import { Button, Field, Modal, inputClass } from "./ui";
 import { CategoryIcon } from "./icons";
 import { useAppData, useToast } from "./providers";
@@ -16,6 +16,7 @@ export interface QuickAddPreset {
   categoryId?: number | null;
   debtId?: number | null;
   recurringId?: number | null;
+  goalId?: number | null;
   amountCents?: number;
   description?: string;
   date?: string;
@@ -50,7 +51,7 @@ const TYPE_BUTTON: Record<TxType, string> = {
 function QuickAddModal({ preset, onClose }: { preset: QuickAddPreset; onClose: () => void }) {
   const router = useRouter();
   const toast = useToast();
-  const { activeCategories, openDebts, category, money, settings } = useAppData();
+  const { activeCategories, openDebts, activeGoals, category, goal, money, settings, minDate } = useAppData();
   // Если смотрим другой месяц, операция по умолчанию попадает в него.
   const viewedMonth = useSearchParams().get("month");
   const defaultDate = isValidMonth(viewedMonth) ? defaultPayDate(viewedMonth, null) : todayInput();
@@ -59,6 +60,7 @@ function QuickAddModal({ preset, onClose }: { preset: QuickAddPreset; onClose: (
   const [amount, setAmount] = useState(preset.amountCents ? centsToInput(preset.amountCents) : "");
   const [categoryId, setCategoryId] = useState<number | null>(preset.categoryId ?? null);
   const [debtId, setDebtId] = useState<number | null>(preset.debtId ?? null);
+  const [goalId, setGoalId] = useState<number | null>(preset.goalId ?? null);
   const [date, setDate] = useState(preset.date ?? defaultDate);
   const [description, setDescription] = useState(preset.description ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +97,7 @@ function QuickAddModal({ preset, onClose }: { preset: QuickAddPreset; onClose: (
     if (cents == null) return setError("Не понял сумму — пример: 12,50");
     if (cents <= 0) return setError("Введи сумму больше нуля");
     if (type !== "SAVING" && !categoryId) return setError("Выбери категорию");
+    if (minDate && date < minDate) return setError("Дата раньше начала учёта");
     setSaving(true);
     setError(null);
     try {
@@ -105,14 +108,15 @@ function QuickAddModal({ preset, onClose }: { preset: QuickAddPreset; onClose: (
           categoryId: type === "SAVING" ? null : categoryId,
           debtId: showDebts ? debtId : null,
           recurringId: preset.recurringId ?? null,
+          goalId: type === "SAVING" ? goalId : null,
           date,
           description: description.trim(),
         },
       });
-      const label = type === "SAVING" ? "Отложено" : (selected?.name ?? TX_TYPE_LABELS[type]);
+      const label = type === "SAVING" ? (goal(goalId)?.name ?? "Отложено") : (selected?.name ?? TX_TYPE_LABELS[type]);
       toast(`${type === "EXPENSE" ? "−" : "+"}${money(cents, { compact: true })} · ${label}`);
       router.refresh();
-      if (addAnother.current && !preset.recurringId) {
+      if (addAnother.current && !preset.recurringId && !preset.goalId) {
         setAmount("");
         setDescription("");
         setDebtId(null);
@@ -137,7 +141,7 @@ function QuickAddModal({ preset, onClose }: { preset: QuickAddPreset; onClose: (
       title={preset.title ?? "Новая операция"}
       footer={
         <>
-          {!preset.recurringId && (
+          {!preset.recurringId && !preset.goalId && (
             <Button
               variant="secondary"
               disabled={saving}
@@ -157,7 +161,7 @@ function QuickAddModal({ preset, onClose }: { preset: QuickAddPreset; onClose: (
       }
     >
       <form id="quick-add" onSubmit={submit} className="space-y-4 sm:space-y-5">
-        {!preset.recurringId && (
+        {!preset.recurringId && !preset.goalId && (
           <div className="grid grid-cols-3 gap-1 rounded-xl bg-gray-100 p-1 dark:bg-gray-800">
             {TYPES.map((t) => (
               <button
@@ -231,9 +235,40 @@ function QuickAddModal({ preset, onClose }: { preset: QuickAddPreset; onClose: (
             </div>
           </div>
         ) : (
-          <p className="rounded-xl bg-saving-50 px-4 py-3 text-sm text-saving-700 dark:bg-saving-500/10 dark:text-[#a9b3ff]">
-            Деньги уходят в накопления: уменьшают остаток месяца и засчитываются в «Отложено по факту».
-          </p>
+          <div className="space-y-3">
+            {activeGoals.length > 0 && !preset.goalId && (
+              <div>
+                <p className="mb-2 text-sm font-medium text-gray-700 dark:text-gray-400">На какую цель?</p>
+                <div className="flex flex-wrap gap-2">
+                  {[null, ...activeGoals].map((g) => {
+                    const active = (g?.id ?? null) === goalId;
+                    return (
+                      <button
+                        key={g?.id ?? "none"}
+                        type="button"
+                        onClick={() => setGoalId(g?.id ?? null)}
+                        aria-pressed={active}
+                        className={cx(
+                          "inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-sm font-medium",
+                          active
+                            ? "border-saving-500 bg-saving-50 text-saving-700 dark:bg-saving-500/15 dark:text-[#a9b3ff]"
+                            : "border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/5",
+                        )}
+                      >
+                        {g ? <CategoryIcon name={g.icon} className="size-3.5" /> : <PiggyBank className="size-3.5" />}
+                        {g ? g.name : "Без цели"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            <p className="rounded-xl bg-saving-50 px-4 py-3 text-sm text-saving-700 dark:bg-saving-500/10 dark:text-[#a9b3ff]">
+              {goal(goalId)
+                ? `Взнос в цель «${goal(goalId)!.name}». Уменьшает остаток месяца и засчитывается в «Отложено по факту».`
+                : "Деньги уходят в накопления: уменьшают остаток месяца и засчитываются в «Отложено по факту»."}
+            </p>
+          </div>
         )}
 
         {showDebts && (
@@ -267,7 +302,7 @@ function QuickAddModal({ preset, onClose }: { preset: QuickAddPreset; onClose: (
 
         <div className="grid grid-cols-[minmax(0,140px)_1fr] gap-3 sm:grid-cols-[160px_1fr] sm:gap-4">
           <Field label="Дата">
-            <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
+            <input type="date" required min={minDate} value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} />
           </Field>
           <Field label="Описание">
             <input

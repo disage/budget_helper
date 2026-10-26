@@ -1,10 +1,10 @@
 "use client";
 
 import {
-  Award, Baby, Book, Briefcase, Bus, Car, Circle, CircleHelp, Coffee, CreditCard, Dumbbell, Ellipsis,
-  Film, Fuel, Gamepad2, Gift, GraduationCap, HeartPulse, House, Landmark, Music, PawPrint, Percent,
-  PiggyBank, Pill, Plane, Shield, Shirt, ShoppingCart, Smartphone, Sparkles, TrainFront, User,
-  Utensils, Wallet, Wifi, Zap, type LucideIcon,
+  Award, Baby, Bike, Book, Briefcase, Bus, Car, Circle, CircleHelp, Coffee, CreditCard, Dumbbell, Ellipsis,
+  Film, Fuel, Gamepad2, Gem, Gift, GraduationCap, HeartPulse, House, Landmark, Laptop, Music, PawPrint, Percent,
+  PiggyBank, Pill, Plane, Shield, Shirt, ShoppingCart, Smartphone, Sofa, Sparkles, TrainFront, User,
+  Umbrella, Utensils, Wallet, Wifi, Zap, type LucideIcon,
 } from "lucide-react";
 import { themedColor } from "@/lib/palette";
 import { useIsDark } from "./useIsDark";
@@ -14,12 +14,15 @@ export const CATEGORY_ICONS: Record<string, LucideIcon> = {
   "shopping-cart": ShoppingCart,
   coffee: Coffee,
   house: House,
+  sofa: Sofa,
   zap: Zap,
   wifi: Wifi,
   smartphone: Smartphone,
+  laptop: Laptop,
   bus: Bus,
   "train-front": TrainFront,
   car: Car,
+  bike: Bike,
   fuel: Fuel,
   "heart-pulse": HeartPulse,
   pill: Pill,
@@ -44,6 +47,8 @@ export const CATEGORY_ICONS: Record<string, LucideIcon> = {
   percent: Percent,
   wallet: Wallet,
   "piggy-bank": PiggyBank,
+  umbrella: Umbrella,
+  gem: Gem,
   ellipsis: Ellipsis,
   circle: Circle,
   "circle-help": CircleHelp,

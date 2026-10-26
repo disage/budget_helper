@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import {
   SEED_CATEGORIES,
   SEED_DEBTS,
+  SEED_GOALS,
   SEED_MONTH,
   SEED_PLAN,
   SEED_RECURRING,
@@ -16,8 +17,13 @@ async function main() {
   await prisma.monthPlan.deleteMany();
   await prisma.recurringPayment.deleteMany();
   await prisma.debt.deleteMany();
+  await prisma.savingsGoal.deleteMany();
   await prisma.category.deleteMany();
-  await prisma.settings.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } });
+  await prisma.settings.upsert({
+    where: { id: 1 },
+    update: { startMonth: SEED_MONTH },
+    create: { id: 1, startMonth: SEED_MONTH },
+  });
 
   const cat: Record<string, number> = {};
   for (const [i, c] of SEED_CATEGORIES.entries()) {
@@ -28,6 +34,11 @@ async function main() {
   const debt: Record<string, number> = {};
   for (const { key, ...data } of SEED_DEBTS) {
     debt[key] = (await prisma.debt.create({ data })).id;
+  }
+
+  const goal: Record<string, number> = {};
+  for (const { key, ...data } of SEED_GOALS) {
+    goal[key] = (await prisma.savingsGoal.create({ data })).id;
   }
 
   const rec: Record<string, number> = {};
@@ -55,6 +66,7 @@ async function main() {
         categoryId: t.category ? cat[t.category] : null,
         debtId: t.debt ? debt[t.debt] : null,
         recurringId: t.recurring ? rec[t.recurring] : null,
+        goalId: t.goal ? goal[t.goal] : null,
       },
     });
   }

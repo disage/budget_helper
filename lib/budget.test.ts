@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { computeSummary, estimatePayoff, planTotals, type SummaryInput } from "./budget";
+import { computeSummary, estimatePayoff, goalProgress, planTotals, type SummaryInput } from "./budget";
 import { parseMoney, formatMoney } from "./money";
-import { defaultPayDate, shiftMonth } from "./month";
+import { byMonthLabel, defaultPayDate, shiftMonth } from "./month";
 import {
   SEED_CATEGORIES,
   SEED_DEBTS,
@@ -99,6 +99,15 @@ describe("computeSummary — июнь 2026 из таблицы", () => {
     expect(s.debtPaidInMonthCents).toBe(30_000);
   });
 
+  it("план и прогноз на конец месяца", () => {
+    expect(s.plan).toMatchObject({ incomeCents: 131_000, expenseCents: 112_000, mandatoryCents: 47_000, freeCents: 84_000, savingsPossibleCents: 13_100 });
+    // Еда: max(300, 350) = 350; Прочее: max(400, 300) = 400; остальное по факту = плану.
+    expect(s.forecastExpenseCents).toBe(122_000);
+    expect(s.forecastIncomeCents).toBe(131_000);
+    expect(s.forecastLeftCents).toBe(9_000);
+    expect(s.plannedLeftCents).toBe(19_000);
+  });
+
   it("все регулярные платежи оплачены", () => {
     expect(s.recurring.every((r) => r.paid)).toBe(true);
   });
@@ -113,6 +122,16 @@ describe("computeSummary — июнь 2026 из таблицы", () => {
 });
 
 describe("computeSummary — начало месяца", () => {
+  it("прогноз учитывает неоплаченные регулярные платежи и ещё не пришедший доход", () => {
+    const input = seedInput();
+    input.transactions = [];
+    const s = computeSummary(input);
+    // Доход по плану 1310; расходы: план по категориям 1120, регулярные платежи покрыты планом.
+    expect(s.forecastIncomeCents).toBe(131_000);
+    expect(s.forecastExpenseCents).toBe(112_000);
+    expect(s.forecastLeftCents).toBe(19_000);
+  });
+
   it("неоплаченные регулярные платежи уже уменьшают свободные деньги", () => {
     const input = seedInput();
     input.transactions = input.transactions.filter((t) => t.type === "INCOME");
@@ -175,6 +194,41 @@ describe("estimatePayoff", () => {
   });
 });
 
+describe("goalProgress", () => {
+  it("цель с дедлайном: сколько откладывать в месяц", () => {
+    // Машина за 10 000 €, отложено 600 €, до декабря 2027 включительно — 15 месяцев с октября 2026.
+    const g = goalProgress(1_000_000, { "2026-08": 20_000, "2026-09": 20_000, "2026-10": 20_000 }, "2027-12", "2026-10");
+    expect(g.savedCents).toBe(60_000);
+    expect(g.remainingCents).toBe(940_000);
+    expect(g.percent).toBeCloseTo(6);
+    expect(g.savedThisMonthCents).toBe(20_000);
+    expect(g.monthsLeft).toBe(15);
+    expect(g.monthlyNeededCents).toBe(62_667);
+    expect(g.overdue).toBe(false);
+    expect(g.etaMonth).toBe("2030-09"); // 940 000 / 20 000 = 47 месяцев
+  });
+
+  it("без дедлайна и без взносов", () => {
+    const g = goalProgress(100_000, {}, null, "2026-10");
+    expect(g).toMatchObject({ savedCents: 0, monthsLeft: null, monthlyNeededCents: null, etaMonth: null, overdue: false });
+  });
+
+  it("дедлайн прошёл", () => {
+    const g = goalProgress(100_000, { "2026-01": 10_000 }, "2026-05", "2026-10");
+    expect(g.monthsLeft).toBe(0);
+    expect(g.overdue).toBe(true);
+    expect(g.monthlyNeededCents).toBeNull();
+  });
+
+  it("цель достигнута", () => {
+    const g = goalProgress(100_000, { "2026-09": 120_000 }, "2026-12", "2026-10");
+    expect(g.remainingCents).toBe(0);
+    expect(g.percent).toBe(100);
+    expect(g.etaMonth).toBeNull();
+    expect(g.monthlyNeededCents).toBe(0);
+  });
+});
+
 describe("деньги и даты", () => {
   it("parseMoney", () => {
     expect(parseMoney("1 310,50")).toBe(131_050);
@@ -187,6 +241,10 @@ describe("деньги и даты", () => {
   it("formatMoney", () => {
     expect(formatMoney(131_000, "EUR").replace(/\s/g, " ")).toBe("1 310,00 €");
     expect(formatMoney(131_000, "EUR", { compact: true }).replace(/\s/g, " ")).toBe("1 310 €");
+  });
+  it("byMonthLabel", () => {
+    expect(byMonthLabel("2027-12")).toBe("к декабрю 2027");
+    expect(byMonthLabel("2026-05")).toBe("к маю 2026");
   });
   it("defaultPayDate", () => {
     const now = new Date(2026, 9, 26);

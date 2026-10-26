@@ -55,6 +55,18 @@ export interface TransactionDTO {
   categoryId: number | null;
   debtId: number | null;
   recurringId: number | null;
+  goalId: number | null;
+}
+
+export interface GoalDTO {
+  id: number;
+  name: string;
+  targetCents: number;
+  icon: string;
+  color: string;
+  deadline: string | null; // YYYY-MM
+  note: string;
+  achievedAt: string | null;
 }
 
 export interface RecurringDTO {
@@ -71,4 +83,6 @@ export interface SettingsDTO {
   currency: string;
   savingsPercent: number;
   carryOverBalance: boolean;
+  /** Первый месяц учёта (YYYY-MM). Раньше него месяцев и операций нет. */
+  startMonth: string | null;
 }

@@ -43,6 +43,13 @@ export function monthRange(month: string): { start: Date; end: Date } {
   };
 }
 
+/** Сколько месяцев от `from` до `to` (может быть отрицательным). */
+export function monthDiff(from: string, to: string): number {
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  return ty * 12 + tm - (fy * 12 + fm);
+}
+
 export function daysInMonth(month: string): number {
   const [y, m] = month.split("-").map(Number);
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -60,6 +67,28 @@ const MONTH_NAMES = [
 export function monthLabel(month: string): string {
   const [y, m] = month.split("-").map(Number);
   return `${MONTH_NAMES[m - 1]} ${y}`;
+}
+
+const MONTH_NAMES_DATIVE = [
+  "январю", "февралю", "марту", "апрелю", "маю", "июню",
+  "июлю", "августу", "сентябрю", "октябрю", "ноябрю", "декабрю",
+];
+
+const MONTH_NAMES_GENITIVE = [
+  "января", "февраля", "марта", "апреля", "мая", "июня",
+  "июля", "августа", "сентября", "октября", "ноября", "декабря",
+];
+
+/** "2026-10" → "с октября 2026" */
+export function sinceMonthLabel(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return `с ${MONTH_NAMES_GENITIVE[m - 1]} ${y}`;
+}
+
+/** "2027-12" → "к декабрю 2027" */
+export function byMonthLabel(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return `к ${MONTH_NAMES_DATIVE[m - 1]} ${y}`;
 }
 
 export function monthShortLabel(month: string): string {

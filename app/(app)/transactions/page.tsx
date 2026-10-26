@@ -1,6 +1,5 @@
 import { TransactionsView } from "@/components/TransactionsView";
-import { getTransactions } from "@/lib/data";
-import { monthOrCurrent } from "@/lib/month";
+import { getTransactions, resolveMonth } from "@/lib/data";
 import { TX_TYPES, type TxType } from "@/lib/types";
 
 interface Search {
@@ -12,7 +11,7 @@ interface Search {
 
 export default async function TransactionsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const sp = await searchParams;
-  const month = monthOrCurrent(sp.month);
+  const month = await resolveMonth(sp.month);
   const type = TX_TYPES.includes(sp.type as TxType) ? (sp.type as TxType) : "";
   const categoryId = sp.categoryId === "none" || /^\d+$/.test(sp.categoryId ?? "") ? sp.categoryId! : "";
   const q = sp.q ?? "";

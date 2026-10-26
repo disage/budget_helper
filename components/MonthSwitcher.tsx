@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useAppData } from "./providers";
 import { currentMonth, monthLabel, shiftMonth } from "@/lib/month";
 
 export function MonthSwitcher({ month }: { month: string }) {
@@ -14,13 +15,21 @@ export function MonthSwitcher({ month }: { month: string }) {
     return `${pathname}?${p}`;
   };
   const isCurrent = month === currentMonth();
+  const { settings } = useAppData();
+  const atStart = !!settings.startMonth && month <= settings.startMonth;
   const btn =
     "flex size-10 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-white";
   return (
     <div className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white p-1 shadow-theme-xs dark:border-gray-800 dark:bg-gray-900">
-      <Link href={href(shiftMonth(month, -1))} className={btn} aria-label="Предыдущий месяц" scroll={false}>
-        <ChevronLeft className="size-5" />
-      </Link>
+      {atStart ? (
+        <span className={`${btn} pointer-events-none opacity-30`} aria-disabled="true" title="Раньше учёт не вёлся">
+          <ChevronLeft className="size-5" />
+        </span>
+      ) : (
+        <Link href={href(shiftMonth(month, -1))} className={btn} aria-label="Предыдущий месяц" scroll={false}>
+          <ChevronLeft className="size-5" />
+        </Link>
+      )}
       <span className="min-w-[132px] text-center text-sm font-semibold text-gray-800 dark:text-white/90">{monthLabel(month)}</span>
       <Link href={href(shiftMonth(month, 1))} className={btn} aria-label="Следующий месяц" scroll={false}>
         <ChevronRight className="size-5" />

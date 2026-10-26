@@ -15,6 +15,7 @@ model Settings {
   currency         String  @default("EUR")
   savingsPercent   Int     @default(10)
   carryOverBalance Boolean @default(true)
+  startMonth       String? // YYYY-MM — первый месяц учёта, раньше него месяцев нет
 }
 
 model Category {
@@ -43,11 +44,13 @@ model Transaction {
   categoryId  Int?
   debtId      Int?
   recurringId Int?
+  goalId      Int? // для SAVING: в какую цель отложено
   createdAt   DateTime @default(now())
 
   category  Category?         @relation(fields: [categoryId], references: [id])
   debt      Debt?             @relation(fields: [debtId], references: [id], onDelete: SetNull)
   recurring RecurringPayment? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
+  goal      SavingsGoal?      @relation(fields: [goalId], references: [id], onDelete: SetNull)
 
   @@index([date])
 }
@@ -90,4 +93,18 @@ model Debt {
 
   transactions Transaction[]
   recurring    RecurringPayment[]
+}
+
+model SavingsGoal {
+  id          Int       @id @default(autoincrement())
+  name        String
+  targetCents Int
+  icon        String    @default("piggy-bank")
+  color       String    @default("#2a78d6")
+  deadline    String? // YYYY-MM — к какому месяцу хочется накопить
+  note        String    @default("")
+  achievedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  transactions Transaction[]
 }

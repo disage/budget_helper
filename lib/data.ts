@@ -1,15 +1,16 @@
 // Серверный слой: загрузка из БД и приведение к DTO. Расчёты — в lib/budget.ts.
 import "server-only";
-import type { Category, Debt, RecurringPayment, Transaction } from "@prisma/client";
+import type { Category, Debt, RecurringPayment, SavingsGoal, Transaction } from "@prisma/client";
 import { prisma } from "./db";
-import { computeSummary, type Summary } from "./budget";
-import { monthOf, monthRange, toDateInput } from "./month";
+import { computeSummary, goalProgress, type GoalProgress, type Summary } from "./budget";
+import { currentMonth, monthOf, monthOrCurrent, monthRange, toDateInput } from "./month";
 import { SEED_CATEGORIES } from "./seed-data";
 import type {
   CategoryDTO,
   CategoryKind,
   DebtDTO,
   DebtType,
+  GoalDTO,
   RecurringDTO,
   SettingsDTO,
   TransactionDTO,
@@ -49,6 +50,18 @@ export const toTransactionDTO = (t: Transaction): TransactionDTO => ({
   categoryId: t.categoryId,
   debtId: t.debtId,
   recurringId: t.recurringId,
+  goalId: t.goalId,
+});
+
+export const toGoalDTO = (g: SavingsGoal): GoalDTO => ({
+  id: g.id,
+  name: g.name,
+  targetCents: g.targetCents,
+  icon: g.icon,
+  color: g.color,
+  deadline: g.deadline,
+  note: g.note,
+  achievedAt: g.achievedAt ? g.achievedAt.toISOString() : null,
 });
 
 export const toRecurringDTO = (r: RecurringPayment): RecurringDTO => ({
@@ -63,12 +76,25 @@ export const toRecurringDTO = (r: RecurringPayment): RecurringDTO => ({
 
 export async function getSettings(): Promise<SettingsDTO> {
   const s = await prisma.settings.upsert({ where: { id: 1 }, update: {}, create: { id: 1 } });
-  return { currency: s.currency, savingsPercent: s.savingsPercent, carryOverBalance: s.carryOverBalance };
+  return { currency: s.currency, savingsPercent: s.savingsPercent, carryOverBalance: s.carryOverBalance, startMonth: s.startMonth };
+}
+
+/** Месяц из URL: по умолчанию текущий, но не раньше начала учёта. */
+export async function resolveMonth(param: unknown): Promise<string> {
+  const month = monthOrCurrent(param);
+  const { startMonth } = await getSettings();
+  return startMonth && month < startMonth ? startMonth : month;
 }
 
 /** Пустая БД (первый запуск) получает категории по умолчанию — без демо-операций. */
 export async function ensureDefaults(): Promise<void> {
   if ((await prisma.category.count()) > 0) return;
+  // Учёт начинается с месяца первого запуска.
+  await prisma.settings.upsert({
+    where: { id: 1 },
+    update: { startMonth: currentMonth() },
+    create: { id: 1, startMonth: currentMonth() },
+  });
   await prisma.category.createMany({
     data: SEED_CATEGORIES.map(({ key, ...c }, i) => ({ ...c, sortOrder: i })),
   });
@@ -85,6 +111,41 @@ export async function getCategories(includeArchived = true): Promise<CategoryDTO
 export async function getDebts(): Promise<DebtDTO[]> {
   const rows = await prisma.debt.findMany({ orderBy: [{ closedAt: "asc" }, { createdAt: "asc" }] });
   return rows.map(toDebtDTO);
+}
+
+export async function getGoals(): Promise<GoalDTO[]> {
+  const rows = await prisma.savingsGoal.findMany({ orderBy: [{ achievedAt: "asc" }, { createdAt: "asc" }] });
+  return rows.map(toGoalDTO);
+}
+
+export interface GoalInfo {
+  goal: GoalDTO;
+  progress: GoalProgress;
+  /** Последние взносы, новые сверху. */
+  contributions: TransactionDTO[];
+  contributionCount: number;
+}
+
+/** Цели с прогрессом. `month` — относительно какого месяца считать «в этом месяце» и сроки. */
+export async function getGoalInfos(month: string): Promise<GoalInfo[]> {
+  const [goals, txs] = await Promise.all([
+    getGoals(),
+    prisma.transaction.findMany({
+      where: { goalId: { not: null }, type: "SAVING" },
+      orderBy: [{ date: "desc" }, { id: "desc" }],
+    }),
+  ]);
+  return goals.map((goal) => {
+    const own = txs.filter((t) => t.goalId === goal.id);
+    const monthly: Record<string, number> = {};
+    for (const t of own) monthly[monthOf(t.date)] = (monthly[monthOf(t.date)] ?? 0) + t.amountCents;
+    return {
+      goal,
+      progress: goalProgress(goal.targetCents, monthly, goal.deadline, month),
+      contributions: own.slice(0, 12).map(toTransactionDTO),
+      contributionCount: own.length,
+    };
+  });
 }
 
 export async function getRecurring(): Promise<RecurringDTO[]> {

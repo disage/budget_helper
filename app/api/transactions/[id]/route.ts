@@ -2,13 +2,14 @@ import { body, notFound, paramId, route } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { toTransactionDTO } from "@/lib/data";
 import { parseDateInput } from "@/lib/month";
-import { normalizeTx } from "@/lib/tx-rules";
+import { assertNotBeforeStart, normalizeTx } from "@/lib/tx-rules";
 import type { TxType } from "@/lib/types";
 import { transactionPatchSchema } from "@/lib/validation";
 
 export const PATCH = route(async (req, ctx) => {
   const id = await paramId(ctx);
   const patch = await body(req, transactionPatchSchema);
+  if (patch.date) await assertNotBeforeStart(patch.date);
   const current = await prisma.transaction.findUnique({ where: { id } });
   if (!current) throw notFound("Операция");
   const merged = await normalizeTx({
@@ -16,6 +17,7 @@ export const PATCH = route(async (req, ctx) => {
     categoryId: patch.categoryId !== undefined ? patch.categoryId : current.categoryId,
     debtId: patch.debtId !== undefined ? patch.debtId : current.debtId,
     recurringId: patch.recurringId !== undefined ? patch.recurringId : current.recurringId,
+    goalId: patch.goalId !== undefined ? patch.goalId : current.goalId,
   });
   const tx = await prisma.transaction.update({
     where: { id },

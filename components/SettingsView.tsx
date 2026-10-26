@@ -35,15 +35,20 @@ function GeneralCard() {
   const [currency, setCurrency] = useState(settings.currency);
   const [percent, setPercent] = useState(String(settings.savingsPercent));
   const [carry, setCarry] = useState(settings.carryOverBalance);
+  const [startMonth, setStartMonth] = useState(settings.startMonth ?? "");
   const [saving, setSaving] = useState(false);
-  const dirty = currency !== settings.currency || Number(percent) !== settings.savingsPercent || carry !== settings.carryOverBalance;
+  const dirty =
+    currency !== settings.currency ||
+    Number(percent) !== settings.savingsPercent ||
+    carry !== settings.carryOverBalance ||
+    startMonth !== (settings.startMonth ?? "");
 
   async function save() {
     const p = Number(percent);
     if (!Number.isInteger(p) || p < 0 || p > 100) return toast("Процент — целое число от 0 до 100", "error");
     setSaving(true);
     try {
-      await api("/api/settings", { method: "PUT", body: { currency, savingsPercent: p, carryOverBalance: carry } });
+      await api("/api/settings", { method: "PUT", body: { currency, savingsPercent: p, carryOverBalance: carry, startMonth: startMonth || null } });
       toast("Настройки сохранены");
       router.refresh();
     } catch (e) {
@@ -61,6 +66,9 @@ function GeneralCard() {
             <input value={percent} onChange={(e) => setPercent(e.target.value)} inputMode="numeric" className={cx(inputClass, "num pr-9")} />
             <span className="absolute top-1/2 right-3.5 -translate-y-1/2 text-sm text-gray-400">%</span>
           </div>
+        </Field>
+        <Field label="Начало учёта" hint="Первый месяц в приложении. Раньше него месяцев нет, и операции туда не записываются.">
+          <input type="month" value={startMonth} onChange={(e) => setStartMonth(e.target.value)} className={inputClass} />
         </Field>
         <Field label="Валюта">
           <select value={currency} onChange={(e) => setCurrency(e.target.value)} className={selectClass}>
@@ -102,7 +110,7 @@ function DataCard() {
   }
 
   return (
-    <Card title="Данные" subtitle="CSV с колонками Date, Amount, Description, Category, Type">
+    <Card title="Данные" subtitle="CSV с колонками Date, Amount, Description, Category, Type, Debt, Goal">
       <div className="flex flex-col gap-2">
         <a href="/api/export.csv" className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-white/[0.03]">
           <Download className="size-4" /> Экспорт всех операций

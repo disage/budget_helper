@@ -13,13 +13,17 @@ import { CategoryBadgeIcon } from "../icons";
 import { useAppData, useConfirm, useToast } from "../providers";
 import { Badge, Button, Card, ProgressBar } from "../ui";
 import { ExpenseDonut } from "./ExpenseDonut";
+import { PlanCompare } from "./PlanCompare";
 import { PlanVsActual } from "./PlanVsActual";
 import { api, cx } from "@/lib/client";
+import { themedColor } from "@/lib/palette";
+import { useIsDark } from "../useIsDark";
 import { defaultPayDate, monthLabel } from "@/lib/month";
 import type { CategoryRow, Summary } from "@/lib/budget";
+import type { GoalInfo } from "@/lib/data";
 import { DEBT_TYPE_LABELS } from "@/lib/types";
 
-export function Dashboard({ s }: { s: Summary }) {
+export function Dashboard({ s, goals }: { s: Summary; goals: GoalInfo[] }) {
   const quickAdd = useQuickAdd();
   const empty = s.transactionCount === 0;
 
@@ -49,10 +53,13 @@ export function Dashboard({ s }: { s: Summary }) {
       )}
 
       <Kpis s={s} />
+      <div className="mt-6">
+        <PlanCompare s={s} />
+      </div>
       <MoneyFlow s={s} />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2 2xl:grid-cols-3">
-        <SavingsCard s={s} />
+        <SavingsCard s={s} goals={goals} />
         <RecurringCard s={s} />
         <DebtsCard s={s} />
       </div>
@@ -125,7 +132,11 @@ function Kpis({ s }: { s: Summary }) {
         tone="brand"
         label="Расходы"
         value={m(s.expenseCents)}
-        hint={`Обязательные ${m(s.mandatoryPaidCents)} · прочие ${m(s.discretionaryCents)}`}
+        hint={
+          s.plan.expenseCents > 0
+            ? `План ${m(s.plan.expenseCents)} · ${s.expenseCents > s.plan.expenseCents ? `перерасход ${m(s.expenseCents - s.plan.expenseCents)}` : `осталось ${m(s.plan.expenseCents - s.expenseCents)}`}`
+            : `Обязательные ${m(s.mandatoryPaidCents)} · прочие ${m(s.discretionaryCents)}`
+        }
       />
       <Kpi
         icon={<ShieldCheck className="size-5" />}
@@ -214,8 +225,9 @@ function MoneyFlow({ s }: { s: Summary }) {
 
 // ---------- Накопления ----------
 
-function SavingsCard({ s }: { s: Summary }) {
+function SavingsCard({ s, goals }: { s: Summary; goals: GoalInfo[] }) {
   const { money, settings } = useAppData();
+  const dark = useIsDark();
   const quickAdd = useQuickAdd();
   const target = s.savingsPossibleCents;
   const done = target > 0 && s.savedCents >= target;
@@ -251,6 +263,56 @@ function SavingsCard({ s }: { s: Summary }) {
       >
         <PiggyBank className="size-4" /> Отложить
       </Button>
+
+      <div className="mt-5 border-t border-gray-100 pt-4 dark:border-gray-800">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Цели</p>
+          <Link href="/goals" className="text-sm font-medium text-brand-700 hover:underline dark:text-brand-400">
+            {goals.length ? "Все цели" : "Добавить цель"}
+          </Link>
+        </div>
+        {goals.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">Поставь цель — например, машину — и откладывай прямо в неё.</p>
+        ) : (
+          <ul className="space-y-3">
+            {goals.map(({ goal: g, progress: p }) => (
+              <li key={g.id}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    quickAdd({
+                      type: "SAVING",
+                      goalId: g.id,
+                      amountCents: p.monthlyNeededCents ? Math.min(p.monthlyNeededCents, p.remainingCents) || undefined : undefined,
+                      title: `В копилку: ${g.name}`,
+                    })
+                  }
+                  className="group flex w-full items-center gap-3 rounded-lg text-left"
+                  title="Пополнить"
+                >
+                  <CategoryBadgeIcon icon={g.icon} color={g.color} size="sm" />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline justify-between gap-2 text-sm">
+                      <span className="truncate font-medium text-gray-800 group-hover:underline dark:text-white/90">{g.name}</span>
+                      <span className="num shrink-0 text-gray-500 dark:text-gray-400">
+                        <b className="font-semibold text-gray-800 dark:text-white/90">{money(p.savedCents, { compact: true })}</b> из {money(g.targetCents, { compact: true })}
+                      </span>
+                    </span>
+                    <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+                      <span className="block h-full rounded-full" style={{ width: `${p.percent}%`, backgroundColor: themedColor(g.color, dark) }} />
+                    </span>
+                    <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+                      {p.savedThisMonthCents > 0 ? `+${money(p.savedThisMonthCents, { compact: true })} в этом месяце` : "в этом месяце ещё не пополняли"}
+                      {p.monthlyNeededCents ? ` · нужно ${money(p.monthlyNeededCents, { compact: true })}/мес` : ""}
+                    </span>
+                  </span>
+                  <Plus className="size-4 shrink-0 text-gray-400 group-hover:text-saving-600" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </Card>
   );
 }

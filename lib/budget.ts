@@ -1,6 +1,6 @@
 // Чистые функции расчёта бюджета. Никакого доступа к БД — только данные на входе.
 import type { CategoryDTO, CategoryKind, DebtType, TxType } from "./types";
-import { shiftMonth } from "./month";
+import { monthDiff, shiftMonth } from "./month";
 
 export interface TxLite {
   id: number;
@@ -100,6 +100,18 @@ export interface Summary {
   debtTotalCents: number;
   debtPaidInMonthCents: number;
   transactionCount: number;
+  /** Плановые итоги месяца (по плану категорий). */
+  plan: PlanTotals;
+  /**
+   * Прогноз «если дальше всё пойдёт по плану»: по каждой категории берётся
+   * max(факт + неоплаченные регулярные платежи, план).
+   */
+  forecastIncomeCents: number;
+  forecastExpenseCents: number;
+  /** Прогноз остатка на конец месяца: доход − расходы − отложено. */
+  forecastLeftCents: number;
+  /** Плановый остаток: плановый доход − плановые расходы. */
+  plannedLeftCents: number;
 }
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
@@ -204,6 +216,20 @@ export function computeSummary(input: SummaryInput): Summary {
     })
     .filter((d) => !d.closed || d.paidInMonthCents > 0);
 
+  // Прогноз: факт по категории, но не меньше плана; неоплаченные регулярные платежи — к своей категории.
+  const unpaidByCategory = new Map<number, number>();
+  for (const r of recurring.filter((x) => x.active && !x.paid)) {
+    unpaidByCategory.set(r.categoryId, (unpaidByCategory.get(r.categoryId) ?? 0) + r.amountCents);
+  }
+  const forecastExpenseCents = sum(
+    expenseRows.map((r) => Math.max(r.actualCents + (r.id != null ? (unpaidByCategory.get(r.id) ?? 0) : 0), r.plannedCents)),
+  );
+  // Регулярные платежи в категориях, которых нет среди строк (например, архивных).
+  const shownIds = new Set(expenseRows.map((r) => r.id));
+  const unpaidOutside = sum([...unpaidByCategory].filter(([id]) => !shownIds.has(id)).map(([, v]) => v));
+  const forecastIncomeCents = sum(incomeRows.map((r) => Math.max(r.actualCents, r.plannedCents)));
+  const plan = planTotals(input.categories, Object.fromEntries(plans), input.savingsPercent);
+
   return {
     month: input.month,
     startBalanceCents: input.startBalanceCents,
@@ -229,6 +255,11 @@ export function computeSummary(input: SummaryInput): Summary {
     debtTotalCents: sum(debts.filter((d) => !d.closed).map((d) => Math.max(d.endCents, 0))),
     debtPaidInMonthCents: sum(debts.map((d) => d.paidInMonthCents)),
     transactionCount: txs.length,
+    plan,
+    forecastIncomeCents,
+    forecastExpenseCents: forecastExpenseCents + unpaidOutside,
+    forecastLeftCents: forecastIncomeCents - forecastExpenseCents - unpaidOutside - savedCents,
+    plannedLeftCents: plan.leftoverCents,
   };
 }
 
@@ -282,4 +313,48 @@ export function estimatePayoff(
   const pace = recent.length > 0 ? sum(recent) / recent.length : minPaymentCents;
   if (pace <= 0) return null;
   return shiftMonth(fromMonth, Math.ceil(remainingCents / pace));
+}
+
+export interface GoalProgress {
+  savedCents: number;
+  remainingCents: number;
+  percent: number;
+  savedThisMonthCents: number;
+  /** Сколько месяцев осталось до дедлайна, включая текущий. null — дедлайна нет. */
+  monthsLeft: number | null;
+  /** Сколько нужно откладывать в месяц, чтобы успеть к дедлайну. */
+  monthlyNeededCents: number | null;
+  overdue: boolean;
+  /** Примерный месяц достижения цели при текущем темпе. */
+  etaMonth: string | null;
+}
+
+/**
+ * Прогресс цели накоплений.
+ * @param monthly суммы взносов по месяцам: { "2026-06": 10000 }
+ */
+export function goalProgress(
+  targetCents: number,
+  monthly: Record<string, number>,
+  deadline: string | null,
+  currentMonth: string,
+): GoalProgress {
+  const savedCents = sum(Object.values(monthly));
+  const remainingCents = Math.max(targetCents - savedCents, 0);
+  const monthsLeft = deadline ? Math.max(monthDiff(currentMonth, deadline) + 1, 0) : null;
+  const overdue = monthsLeft === 0 && remainingCents > 0;
+  const history = Object.keys(monthly)
+    .filter((m) => m <= currentMonth)
+    .sort()
+    .map((m) => monthly[m]);
+  return {
+    savedCents,
+    remainingCents,
+    percent: targetCents > 0 ? Math.min(100, (savedCents / targetCents) * 100) : 0,
+    savedThisMonthCents: monthly[currentMonth] ?? 0,
+    monthsLeft,
+    monthlyNeededCents: monthsLeft ? Math.ceil(remainingCents / monthsLeft) : null,
+    overdue,
+    etaMonth: remainingCents === 0 ? null : estimatePayoff(remainingCents, history, 0, currentMonth),
+  };
 }

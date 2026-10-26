@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useMemo, useRef, useState, type
 import { CircleAlert, CircleCheck } from "lucide-react";
 import { Button, Modal } from "./ui";
 import { formatMoney } from "@/lib/money";
-import type { CategoryDTO, CategoryKind, DebtDTO, SettingsDTO } from "@/lib/types";
+import type { CategoryDTO, CategoryKind, DebtDTO, GoalDTO, SettingsDTO } from "@/lib/types";
 
 // ---------- Данные приложения (категории, долги, настройки) ----------
 
@@ -12,6 +12,7 @@ interface AppData {
   settings: SettingsDTO;
   categories: CategoryDTO[];
   debts: DebtDTO[];
+  goals: GoalDTO[];
   authEnabled: boolean;
 }
 
@@ -21,6 +22,11 @@ interface AppDataValue extends AppData {
   activeCategories: (kind: CategoryKind) => CategoryDTO[];
   debt: (id: number | null | undefined) => DebtDTO | undefined;
   openDebts: DebtDTO[];
+  goal: (id: number | null | undefined) => GoalDTO | undefined;
+  /** Цели, которые ещё не достигнуты. */
+  activeGoals: GoalDTO[];
+  /** Самая ранняя допустимая дата операции (YYYY-MM-DD) или undefined. */
+  minDate: string | undefined;
 }
 
 const AppDataContext = createContext<AppDataValue | null>(null);
@@ -35,6 +41,7 @@ function AppDataProvider({ data, children }: { data: AppData; children: ReactNod
   const value = useMemo<AppDataValue>(() => {
     const byId = new Map(data.categories.map((c) => [c.id, c]));
     const debtById = new Map(data.debts.map((d) => [d.id, d]));
+    const goalById = new Map(data.goals.map((g) => [g.id, g]));
     return {
       ...data,
       money: (cents, opts) => formatMoney(cents, data.settings.currency, opts),
@@ -43,6 +50,9 @@ function AppDataProvider({ data, children }: { data: AppData; children: ReactNod
         data.categories.filter((c) => c.kind === kind && !c.archived).sort((a, b) => a.sortOrder - b.sortOrder),
       debt: (id) => (id == null ? undefined : debtById.get(id)),
       openDebts: data.debts.filter((d) => !d.closedAt),
+      goal: (id) => (id == null ? undefined : goalById.get(id)),
+      activeGoals: data.goals.filter((g) => !g.achievedAt),
+      minDate: data.settings.startMonth ? `${data.settings.startMonth}-01` : undefined,
     };
   }, [data]);
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

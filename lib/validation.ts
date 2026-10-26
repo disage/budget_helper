@@ -18,6 +18,7 @@ export const transactionSchema = z
     categoryId: id.nullable().default(null),
     debtId: id.nullable().default(null),
     recurringId: id.nullable().default(null),
+    goalId: id.nullable().default(null),
   })
   .refine((t) => t.type === "SAVING" || t.categoryId != null, {
     message: "Выбери категорию",
@@ -32,6 +33,7 @@ export const transactionPatchSchema = z.object({
   categoryId: id.nullable().optional(),
   debtId: id.nullable().optional(),
   recurringId: id.nullable().optional(),
+  goalId: id.nullable().optional(),
 });
 
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Цвет в формате #RRGGBB");
@@ -77,8 +79,20 @@ export const debtSchema = z.object({
 
 export const debtPatchSchema = debtSchema.partial().extend({ closed: z.boolean().optional() });
 
+export const goalSchema = z.object({
+  name: z.string().trim().min(1, "Название обязательно").max(60),
+  targetCents: cents,
+  icon: z.string().max(40).default("piggy-bank"),
+  color: hexColor.default("#2a78d6"),
+  deadline: monthSchema.nullable().default(null),
+  note: z.string().trim().max(500).default(""),
+});
+
+export const goalPatchSchema = goalSchema.partial().extend({ achieved: z.boolean().optional() });
+
 export const settingsSchema = z.object({
   currency: z.enum(CURRENCIES),
   savingsPercent: z.number().int().min(0).max(100),
   carryOverBalance: z.boolean(),
+  startMonth: monthSchema.nullable(),
 });

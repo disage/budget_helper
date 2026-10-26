@@ -1,6 +1,7 @@
 import { body, HttpError, route } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { isValidMonth } from "@/lib/month";
+import { assertNotBeforeStart } from "@/lib/tx-rules";
 import { planSchema } from "@/lib/validation";
 
 function monthParam(req: Request): string {
@@ -16,6 +17,7 @@ export const GET = route(async (req) => {
 
 export const PUT = route(async (req) => {
   const month = monthParam(req);
+  await assertNotBeforeStart(month);
   const { items } = await body(req, planSchema);
   await prisma.$transaction(
     items.map(({ categoryId, plannedCents }) =>

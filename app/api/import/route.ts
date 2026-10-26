@@ -16,7 +16,7 @@ function normalizeDate(s: string): string | null {
 }
 
 /**
- * Импорт CSV: Date, Amount, Description, Category, Type[, Debt].
+ * Импорт CSV: Date, Amount, Description, Category, Type[, Debt, Goal].
  * Неизвестные категории создаются, долги ищутся по имени; ошибки по строкам возвращаются списком.
  */
 export const POST = route(async (req) => {
@@ -28,11 +28,13 @@ export const POST = route(async (req) => {
 
   const header = rows[0].map((h) => h.trim().toLowerCase());
   const col = (name: string) => header.indexOf(name);
-  const idx = { date: col("date"), amount: col("amount"), desc: col("description"), cat: col("category"), type: col("type"), debt: col("debt") };
+  const idx = { date: col("date"), amount: col("amount"), desc: col("description"), cat: col("category"), type: col("type"), debt: col("debt"), goal: col("goal") };
   if (idx.date < 0 || idx.amount < 0) throw new HttpError(400, "Нужны колонки Date и Amount");
 
+  const settings = await prisma.settings.findUnique({ where: { id: 1 } });
   const categories = await prisma.category.findMany();
   const debts = await prisma.debt.findMany();
+  const goals = await prisma.savingsGoal.findMany();
   const errors: string[] = [];
   let imported = 0;
 
@@ -42,6 +44,10 @@ export const POST = route(async (req) => {
     const rawAmount = parseMoney(r[idx.amount] ?? "");
     if (!date || rawAmount == null || rawAmount === 0) {
       errors.push(`Строка ${line}: неверная дата или сумма`);
+      continue;
+    }
+    if (settings?.startMonth && date.slice(0, 7) < settings.startMonth) {
+      errors.push(`Строка ${line}: дата раньше начала учёта — пропущена`);
       continue;
     }
     const rawType = (r[idx.type] ?? "").trim().toUpperCase();
@@ -64,6 +70,13 @@ export const POST = route(async (req) => {
       if (debt) debtId = debt.id;
       else errors.push(`Строка ${line}: долг «${debtName}» не найден — платёж импортирован без привязки`);
     }
+    let goalId: number | null = null;
+    const goalName = idx.goal >= 0 ? (r[idx.goal] ?? "").trim() : "";
+    if (type === "SAVING" && goalName) {
+      const goal = goals.find((g) => g.name.toLowerCase() === goalName.toLowerCase());
+      if (goal) goalId = goal.id;
+      else errors.push(`Строка ${line}: цель «${goalName}» не найдена — взнос импортирован без привязки`);
+    }
     await prisma.transaction.create({
       data: {
         date: parseDateInput(date),
@@ -72,6 +85,7 @@ export const POST = route(async (req) => {
         type,
         categoryId,
         debtId,
+        goalId,
       },
     });
     imported++;

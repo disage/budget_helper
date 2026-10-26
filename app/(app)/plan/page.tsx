@@ -1,10 +1,10 @@
 import { PlanEditor } from "@/components/PlanEditor";
 import { prisma } from "@/lib/db";
-import { getSummary } from "@/lib/data";
-import { monthOrCurrent, shiftMonth } from "@/lib/month";
+import { getSummary, resolveMonth } from "@/lib/data";
+import { shiftMonth } from "@/lib/month";
 
 export default async function PlanPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
-  const month = monthOrCurrent((await searchParams).month);
+  const month = await resolveMonth((await searchParams).month);
   const [plans, prevCount, summary] = await Promise.all([
     prisma.monthPlan.findMany({ where: { month } }),
     prisma.monthPlan.count({ where: { month: shiftMonth(month, -1) } }),

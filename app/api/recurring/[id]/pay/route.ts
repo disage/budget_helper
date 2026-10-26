@@ -3,6 +3,7 @@ import { HttpError, notFound, paramId, route } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { toTransactionDTO } from "@/lib/data";
 import { defaultPayDate, isValidMonth, monthOf, parseDateInput } from "@/lib/month";
+import { assertNotBeforeStart } from "@/lib/tx-rules";
 import { dateSchema } from "@/lib/validation";
 
 const paySchema = z.object({
@@ -22,6 +23,7 @@ export const POST = route(async (req, ctx) => {
   if (!r) throw notFound("Регулярный платёж");
   const date = opts.date ?? defaultPayDate(month, r.dayOfMonth);
   if (monthOf(parseDateInput(date)) !== month) throw new HttpError(400, "Дата должна быть в выбранном месяце");
+  await assertNotBeforeStart(date);
   const tx = await prisma.transaction.create({
     data: {
       date: parseDateInput(date),

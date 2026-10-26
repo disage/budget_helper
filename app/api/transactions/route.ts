@@ -2,7 +2,7 @@ import { body, route } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { getTransactions, toTransactionDTO } from "@/lib/data";
 import { isValidMonth, parseDateInput } from "@/lib/month";
-import { normalizeTx } from "@/lib/tx-rules";
+import { assertNotBeforeStart, normalizeTx } from "@/lib/tx-rules";
 import { TX_TYPES, type TxType } from "@/lib/types";
 import { transactionSchema } from "@/lib/validation";
 
@@ -21,6 +21,7 @@ export const GET = route(async (req) => {
 
 export const POST = route(async (req) => {
   const data = await normalizeTx(await body(req, transactionSchema));
+  await assertNotBeforeStart(data.date);
   const tx = await prisma.transaction.create({ data: { ...data, date: parseDateInput(data.date) } });
   return toTransactionDTO(tx);
 });
