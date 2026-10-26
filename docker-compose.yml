@@ -1,0 +1,16 @@
+services:
+  budget:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # Задай пароль в .env рядом с этим файлом: APP_PASSWORD=...
+      APP_PASSWORD: ${APP_PASSWORD:-}
+      # Раскомментируй, если открываешь по http без HTTPS не с localhost.
+      # INSECURE_COOKIE: "1"
+    volumes:
+      - budget-data:/data
+    restart: unless-stopped
+
+volumes:
+  budget-data:

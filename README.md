@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Budget Helper
 
-## Getting Started
+Личный месячный бюджет: сколько пришло, куда ушло, сколько свободных денег после обязательных платежей, сколько можно и сколько удалось отложить, как гасятся долги.
 
-First, run the development server:
+Next.js 15 (App Router) + Tailwind (в стиле TailAdmin) + Prisma + SQLite + ApexCharts.
+
+## Запуск
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npx prisma migrate dev   # создаст prisma/dev.db и зальёт демо-данные за июнь 2026
+npm run dev              # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+На пустой базе приложение само создаёт категории по умолчанию. Демо-данные (июнь 2026 из исходной таблицы) загружает сид:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run db:seed    # перезаписывает БД демо-данными
+npm run db:reset   # удаляет всё и накатывает миграции заново (+ сид)
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Тесты формул: `npm test`.
 
-## Learn More
+## Как считается
 
-To learn more about Next.js, take a look at the following resources:
+| Показатель | Формула |
+|---|---|
+| Обязательные платежи | расходы в обязательных категориях и оплаты регулярных платежей + ещё не оплаченные в этом месяце регулярные платежи |
+| Свободные деньги | доход − обязательные платежи |
+| Можно отложить | min(зарплата × N%, свободные деньги), N = 10 по умолчанию |
+| Ещё можно потратить | свободные деньги − необязательные расходы − отложено |
+| Баланс на конец | баланс на начало + доход − расходы − отложено |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+«Отложено» — отдельный тип операции (не расход и не доход). Платёж в категории с флагом «для долгов» привязывается к конкретному долгу и уменьшает его остаток.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Пароль
 
-## Deploy on Vercel
+В `.env` задай `APP_PASSWORD="..."`. Если оставить пустым, вход без пароля. В продакшене cookie ставится с флагом `Secure`. Если открываешь по http не с localhost, задай `INSECURE_COOKIE=1`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Валюта и процент накоплений
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Меняются на странице **Настройки**. Там же категории (цвет, иконка, флаги «обязательная», «для долгов», «зарплата»), порядок перетаскиванием, экспорт и импорт CSV.
+
+## Где лежат данные и бэкап
+
+- Локально: файл `prisma/dev.db` (путь задаёт `DATABASE_URL` в `.env`).
+- Бэкап: просто скопируй этот файл, лучше при остановленном сервере. Ещё можно сделать **Настройки → Экспорт всех операций** (CSV).
+
+## Docker
+
+```bash
+APP_PASSWORD=secret docker compose up -d --build   # http://localhost:3000
+```
+
+База лежит в volume `budget-data` (`/data/budget.db` внутри контейнера), миграции применяются при старте. Бэкап:
+
+```bash
+docker compose cp budget:/data/budget.db ./budget-backup.db
+```
+
+## Структура
+
+- `lib/budget.ts` — все расчёты, чистые функции (+ `lib/budget.test.ts`)
+- `lib/data.ts` — загрузка из БД, `lib/validation.ts` — zod-схемы
+- `app/api/*` — REST API, `app/(app)/*` — страницы
+- `components/` — UI (`QuickAdd.tsx` — быстрое добавление, хоткей **N**)
+- `prisma/schema.prisma`, `prisma/seed.ts`, `lib/seed-data.ts`

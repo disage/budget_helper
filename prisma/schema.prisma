@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Деньги везде хранятся в центах (Int).
+// Строковые поля type/kind ограничены значениями из lib/types.ts.
+
+model Settings {
+  id               Int     @id @default(1)
+  currency         String  @default("EUR")
+  savingsPercent   Int     @default(10)
+  carryOverBalance Boolean @default(true)
+}
+
+model Category {
+  id          Int     @id @default(autoincrement())
+  name        String
+  kind        String // EXPENSE | INCOME
+  color       String  @default("#64748B")
+  icon        String  @default("circle")
+  isMandatory Boolean @default(false)
+  isSalary    Boolean @default(false)
+  isDebt      Boolean @default(false) // платежи в этой категории привязываются к долгу
+  sortOrder   Int     @default(0)
+  archived    Boolean @default(false)
+
+  transactions Transaction[]
+  plans        MonthPlan[]
+  recurring    RecurringPayment[]
+}
+
+model Transaction {
+  id          Int      @id @default(autoincrement())
+  date        DateTime
+  amountCents Int
+  description String   @default("")
+  type        String // EXPENSE | INCOME | SAVING
+  categoryId  Int?
+  debtId      Int?
+  recurringId Int?
+  createdAt   DateTime @default(now())
+
+  category  Category?         @relation(fields: [categoryId], references: [id])
+  debt      Debt?             @relation(fields: [debtId], references: [id], onDelete: SetNull)
+  recurring RecurringPayment? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
+
+  @@index([date])
+}
+
+model MonthPlan {
+  id           Int    @id @default(autoincrement())
+  month        String // YYYY-MM
+  categoryId   Int
+  plannedCents Int
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([month, categoryId])
+}
+
+model RecurringPayment {
+  id          Int     @id @default(autoincrement())
+  name        String
+  amountCents Int
+  categoryId  Int
+  dayOfMonth  Int?
+  debtId      Int?
+  active      Boolean @default(true)
+
+  category     Category      @relation(fields: [categoryId], references: [id])
+  debt         Debt?         @relation(fields: [debtId], references: [id], onDelete: SetNull)
+  transactions Transaction[]
+}
+
+model Debt {
+  id              Int       @id @default(autoincrement())
+  name            String
+  type            String // CREDIT_CARD | PERSONAL | LOAN
+  initialCents    Int
+  minPaymentCents Int       @default(0)
+  interestRate    Float?
+  note            String    @default("")
+  closedAt        DateTime?
+  createdAt       DateTime  @default(now())
+
+  transactions Transaction[]
+  recurring    RecurringPayment[]
+}
